@@ -91,7 +91,8 @@ int main(int argc, char const *argv[])
 		{
 			wait(sem_id1, 0);
 			wait(sem_id2, 0);
-			printf("p2 pid: %d ppid: %d\n", getpid(), getppid() );
+			//printf("p2 pid: %d ppid: %d\n", getpid(), getppid() );
+                        printf("I am the process P4\n");
 			signal(sem_id2, 0);
 			signal(sem_id3, 0);
 			exit(0);
@@ -101,7 +102,7 @@ int main(int argc, char const *argv[])
 			wait(sem_id3, 0);
 			wait(sem_id3, 1);
 			printf("p4 pid: %d ppid: %d\n", getpid(), getppid() );
-
+                        printf("I am the process P1\n");
 			delete_sem(sem_id1);
 			delete_sem(sem_id2);
 			delete_sem(sem_id3);
@@ -113,7 +114,8 @@ int main(int argc, char const *argv[])
 		while ((pid3 = fork()) == -1);
 		if (pid3 > 0)
 		{
-			printf("p1 pid: %d ppid: %d\n", getpid(), getppid() );
+			//printf("p1 pid: %d ppid: %d\n", getpid(), getppid() );
+                        printf("I am the process P3\n");
 			unsigned short arry[2] = {1, 1};
 			set_values_of_sem(sem_id1, arry);
 			exit(0);
@@ -122,7 +124,8 @@ int main(int argc, char const *argv[])
 		{
 			wait(sem_id1, 1);
 			wait(sem_id2, 0);
-			printf("p3 pid: %d ppid: %d\n", getpid(), getppid() );
+			//printf("p3 pid: %d ppid: %d\n", getpid(), getppid() );
+                        printf("I am the process P2\n");
 			signal(sem_id2, 0);
 			signal(sem_id3, 1);
 			exit(0);
