@@ -1,0 +1,669 @@
+#include<iostream>
+#include<time.h>
+#include<malloc.h>
+using namespace std;
+#define ref_size 20
+#define phy_size 3
+int ref[ref_size];
+float interrupt[6]={0.0};
+//int ref[ref_size]={0};
+int phy[phy_size];
+
+void set_rand_num()	//产生具有局部特性的随机数列
+{
+	cout<<"页面访问序列："<<endl;
+	int p=12;
+	int e=4;
+	int m=4;
+	int i=0;
+	int j=0;
+	int n=0;
+	double t=0.6;
+	int temp;
+	for(i=0;i<m;i++,j++)
+	{
+		Sleep(1000*i);
+		srand(time(NULL));
+		temp=rand()%e+p;
+		ref[j]=temp;
+		cout<<ref[j]<<"  ";
+	}
+	for(n=0;n<4;n++)
+	{
+		Sleep(1000*n);
+		srand(time(NULL));
+		double r=(double)(rand()%10)/10.0;
+		//cout<<r<<endl;
+		if(r<t) p=p+int(10*r);
+		else
+			p=(p+1)%20;
+		for(i=0;i<m;i++,j++)
+		{
+			Sleep(1000*i);
+			srand(time(NULL));
+			temp=rand()%e+p;
+			ref[j]=temp;
+			cout<<ref[j]<<"  ";
+		}
+	}
+	cout<<endl;
+}
+
+////////////////////////////////////////////////////////////////
+typedef struct QNode	//定义队列数据结构
+{
+	int data;
+	struct QNode *next;
+}QNode,*QueuePtr;
+typedef struct
+{
+	QueuePtr front;			//头指针
+	QueuePtr rear;			//尾指针
+}LinkQueue;
+//定义链表结点
+typedef struct LNode	//定义循环链表数据结构
+{
+	int data;
+	int flag;			//访问位
+	int modify;			//修改位
+	struct LNode *next;
+}LNode,*LinkList;
+
+
+int CreatList(LinkList &L)//创建循环带有头结点的链表
+{
+	L=(LinkList)malloc(sizeof(LNode));
+	if(!L) exit(-1);
+	L->next=L;
+	L->flag=0;
+	return 1;
+}
+
+int Exchange_LNode(LinkList &L,int e,int i)//将链表L中序号为i的结点替换为内容为e的结点
+{
+	if(L->next==L) exit(-1);
+	LinkList p,q;
+	int j=0;
+	p=(LinkList)malloc(sizeof(LNode));
+	q=(LinkList)malloc(sizeof(LNode));
+	q->data=e;
+	p=L;
+	for(j=0;j<i;j++)
+		p=p->next;
+	q->next=p->next->next;
+	p->next=q;
+	q->flag=1;		//设置新结点的访问位为1
+	q->modify=0;	//设置新结点的修改位为0
+	return 1;
+}
+
+int Insert_LNode(LinkList &L,int e)
+{
+	LinkList p,q;
+	p=(LinkList)malloc(sizeof(LNode));
+	q=(LinkList)malloc(sizeof(LNode));
+	q->data=e;
+	q->flag=1;		//设置新结点的访问位为1
+	q->modify=0;	//设置新结点的修改位为0
+	p=L;
+	while(p->next!=L)
+	{
+		p=p->next;
+	}
+	p->next=q;
+	q->next=L;
+	return 1;
+}
+
+bool Search_LinkList(LinkList &L,int e,int &i)
+{
+	i=1;
+	if(L->next==L) exit(-1);
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	if(!p) exit(-1);
+	p=L->next;		//p指向链表的第一个结点（非头结点）
+	while(p!=L && p->data!=e)
+	{
+		p=p->next;
+		i++;
+	}
+	if(p==L)		//没有找到符合要求的结点
+		return false;
+	return true;
+}
+
+void Search_LL_Flag(LinkList &L,int &i)
+{
+	i=1;
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	if(!p) exit(-1);
+	p=L->next;
+	while(p->flag!=0)
+	{
+		p->flag=0;		//修改访问标志位为0
+		p=p->next;
+		if(p==L)		//跳过头结点
+			p=p->next;
+		i++;
+		if(i==4)		//跳过头结点
+			i=1;
+	}
+	//return 1;
+}
+
+void Set_LL_Flag(LinkList &L,int i)	//设置链表L中的序号为i的结点的flag标志为1；
+{
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	if(!p) exit(-1);
+	p=L->next;
+	if(i==1)
+		p->flag=1;
+	if(i==2)
+	{
+		p=p->next;
+		p->flag=1;
+	}
+	if(i==3)
+	{
+		p=p->next;
+		p=p->next;
+		p->flag=1;
+	}
+}
+
+int Search_LL_ModifyClock(LinkList &L,int &modify_num)//找到改进的CLOCK算法所需要淘汰的页，用modify_num返回其位置
+{
+	modify_num=1;
+	if(L->next==L) exit(-1);
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	if(!p) exit(-1);
+	p=L->next;		//p指向链表的第一个结点（非头结点）
+	while(p!=L)		//第一轮扫描A=0并且M=0的结点
+	{
+		if(p->flag==0 && p->modify==0)
+			break;	//找到
+		p=p->next;
+		modify_num++;
+	}
+	if(p==L)
+	{
+		modify_num=1;
+		p=L->next;
+		while(p!=L)		//第二轮扫描A=0并且M=1的结点，同时修改访问过的结点的访问位为0
+		{
+			if(p->flag!=0)
+				p->flag=0;
+			else if(p->modify==1)
+				break;
+			p=p->next;
+			modify_num++;
+
+		}
+	}
+	if(p==L)
+	{
+		modify_num=1;
+		p=L->next;
+		while(p!=L)		//第三轮扫描A=0并且M=0的结点
+		{
+			if(p->flag==0 && p->modify==0)
+				break;
+			p=p->next;
+			modify_num++;
+		}
+		if(p==L)
+		{
+			modify_num=1;
+			p=L->next;
+			while(p!=L)		//第四轮扫描A=0并且M=1的结点
+			{
+				if(p->flag!=0)
+					p->flag=0;
+				else if(p->modify==1)
+					break;
+				p=p->next;
+				modify_num++;
+
+			}
+		}
+
+	}
+	return 1;
+}
+
+void Set_LL_modify(LinkList &L,int i)	//设置链表L中的序号为i的结点的modify标志为1；
+{
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	if(!p) exit(-1);
+	p=L->next;
+	if(i==0)
+		p->modify=1;
+	if(i==1)
+	{
+		p=p->next;
+		p->modify=1;
+	}
+	if(i==2)
+	{
+		p=p->next;
+		p=p->next;
+		p->modify=1;
+	}
+}
+
+int DestroyLinkList(LinkList &L)		//删除链表，并释放链表空间
+{
+	LinkList p,q;
+	p=(LinkList)malloc(sizeof(LNode));
+	if(!p) exit(-1);
+	q=(LinkList)malloc(sizeof(LNode));
+	if(!q) exit(-1);
+	p=L->next;
+	while(p!=L)
+	{
+		q=p->next;
+		free(p);
+		p=q;
+	}
+	free(q);
+	return 1;
+}
+
+int InitQueue(LinkQueue &Q)		
+{
+	Q.front=Q.rear=(QueuePtr)malloc(sizeof(QNode));
+	if(!Q.front) exit(-1);
+	Q.front->next=NULL;
+	return 1;
+}
+
+int EnQueue(LinkQueue &Q,int e)		//插入元素e为Q的新的队尾元素
+{
+	QueuePtr p;
+	p=(QueuePtr)malloc(sizeof(QNode));
+	if(!p) exit(-1);
+	p->data=e;
+	p->next=NULL;
+	Q.rear->next=p;
+	Q.rear=p;
+	return 1;
+}
+
+int DeQueue(LinkQueue &Q,int &e)	//若队列不空，则删除Q的队头元素，用e返回其值
+{
+	if(Q.front==Q.rear) return -1;
+	QueuePtr p;
+	p=(QueuePtr)malloc(sizeof(QNode));	
+	p=Q.front->next;
+	e=p->data;
+	Q.front->next=p->next;
+	if(Q.rear==p)
+		Q.rear=Q.front;
+	free(p);
+	return 1;
+}
+
+bool SearchQueue(LinkQueue &Q,int e,int &i)	//寻找队列Q中结点data域等于e的结点，并用i返回其在Q中的位置
+{
+	i=1;
+	if(Q.front==Q.rear) exit(-1);
+	QueuePtr p;
+	p=(QueuePtr)malloc(sizeof(QNode));
+	if(!p) exit(-1);
+	p=Q.front->next;		//p指向队列的第一个节点（非头结点）
+	while(p!=NULL && p->data!=e)
+	{
+		p=p->next;
+		i++;
+	}
+	if(!p)
+		return false;
+	return true;
+}
+
+int DelMid_Queue(LinkQueue &Q,int &e)		//删除Q的中间元素，并用e返回其值
+{
+	if(Q.front==Q.rear) return -1;
+	QueuePtr p;
+	p=(QueuePtr)malloc(sizeof(QNode));
+	if(!p) exit(-1);
+	p=Q.front->next;
+	e=p->next->data;
+	p->next=p->next->next;
+	return 1;
+}
+
+int DestroyQueue(LinkQueue &Q)			//删除队列并释放空间
+{
+	while(Q.front)
+	{
+		Q.rear=Q.front->next;
+		free(Q.front);
+		Q.front=Q.rear;
+	}
+	return 1;
+}
+//////////////////////////////////////////////////////////////
+int max1(int a,int b, int c)	//返回a,b,c中的最大值
+{
+	if(a<b) a=b;
+	if(a<c) a=c;
+	return a;
+}
+int getnum(int a,int b)			//用b返回元素a在被引用数列中的下一个位置
+{
+	for(;b<ref_size;b++)
+	{
+		if(a==ref[b])
+			break;
+	}
+	return b;
+}
+void ORA()			/////////////最佳置换算法
+{
+	cout<<"\n***********************最佳置换算法*************************"<<endl;
+	int i,j;
+	int num_0,num_1,num_2,num_max;
+	int interrupt_num=0;
+	//num_0=num_1=num_2=0;
+	for(i=0;i < phy_size;i++)	//前三个数进内存
+		phy[i]=ref[i];
+	for(i=0;i<phy_size;i++)		//输出最初的三个数
+		cout<<phy[i]<<"\t";
+	cout<<endl;
+	for(j=phy_size;j<ref_size;j++)
+	{
+	
+		if(!(ref[j]==phy[0] || ref[j]==phy[1] || ref[j]==phy[2]))	//若产生缺页中断，选择最久不会被使用的页被替换
+		{
+			num_0=getnum(phy[0],j+1);
+			num_1=getnum(phy[1],j+1);
+			num_2=getnum(phy[2],j+1);
+			num_max=max1(num_0,num_1,num_2);
+			if(num_0==num_max)
+				phy[0]=ref[j];
+			else
+				if(num_1==num_max)
+					phy[1]=ref[j];
+				else
+					if(num_2==num_max)
+						phy[2]=ref[j];
+			interrupt_num++;
+		
+		}
+		cout<<"进入页："<<ref[j]<<endl;
+		for(i=0;i<phy_size;i++)		//输出内存状态
+			cout<<phy[i]<<"\t";			
+		cout<<endl<<endl;
+	}
+	cout<<"最佳置换算法缺页中断次数："<<interrupt_num<<endl;			interrupt[0]=((float)interrupt_num/20.0)*100.0;	
+}
+
+
+void FIFO()
+{
+	cout<<"\n***********************先进先出置换算法*************************"<<endl;
+	LinkQueue L;
+	QueuePtr p;
+	int i,j,e,m;
+	int interrupt_num=0;
+	InitQueue(L);
+	for(i=0;i<phy_size;i++)
+	{
+		EnQueue(L,ref[i]);
+	}
+	p=(QueuePtr)malloc(sizeof(QNode));
+	p=L.front->next;
+	for(j=0;p!=NULL && j<phy_size;j++)//前三个数进内存
+	{
+		cout<<p->data<<"\t";
+		p=p->next;
+	}
+	cout<<endl;
+	for(i=phy_size;i<ref_size;i++)
+	{
+	
+		if(!SearchQueue(L,ref[i],m))	//产生缺页中断，选择最先进入的页被替换
+		{
+			DeQueue(L,e);
+			//cout<<e<<endl;
+			EnQueue(L,ref[i]);
+			interrupt_num++;
+			SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),FOREGROUND_INTENSITY | FOREGROUND_BLUE);
+		}
+		cout<<"进入页："<<ref[i]<<endl;
+		p=L.front->next;
+		for(j=0;p!=NULL && j<phy_size;j++)
+		{
+			cout<<p->data<<"\t";
+			p=p->next;
+		}
+		cout<<endl<<endl;
+	}
+	cout<<"先进先出置换算法缺页中断次数："<<interrupt_num<<endl;		 
+	interrupt[2]=((float)interrupt_num/20.0)*100.0;	
+	free(p);
+	DestroyQueue(L);
+}
+
+void LRU()							/////////最近最久未使用算法
+{
+	cout<<"\n**********************最近最久未使用置换算法**********************"<<endl;
+	int QNode_num=0;
+		LinkQueue L;
+	QueuePtr p;
+	int i,j,e;
+	int interrupt_num=0;
+	InitQueue(L);
+	for(i=0;i<phy_size;i++)
+	{
+		EnQueue(L,ref[i]);
+	}
+	p=(QueuePtr)malloc(sizeof(QNode));
+	p=L.front->next;
+	for(j=0;p!=NULL && j<phy_size;j++)
+	{
+		cout<<p->data<<"\t";
+		p=p->next;
+	}
+	cout<<endl;
+	for(i=phy_size;i<ref_size;i++)
+	{
+	
+		if(!SearchQueue(L,ref[i],QNode_num))	//产生缺页中断，选择最“老”的页面被替换
+		{
+			DeQueue(L,e);
+			//cout<<e<<endl;
+			EnQueue(L,ref[i]);
+			interrupt_num++;
+		
+		}
+		else if(QNode_num==1)	//如果接下来是内存中的第一个，则将它移到最后一个，即标志为最近使用的页
+		{
+			EnQueue(L,ref[i]);
+			DeQueue(L,e);
+		}
+		else if(QNode_num==2)	//如果接下来是内存中的第二个，则将它删除，并在队列尾部添加相同元素，即标志为最近使用的页
+		{
+			DelMid_Queue(L,e);
+			EnQueue(L,e);
+		}
+		cout<<"进入页："<<ref[i]<<endl;
+		p=L.front->next;
+		for(j=0;p!=NULL && j<phy_size;j++)	//输出内存状况
+		{
+			cout<<p->data<<"\t";
+			p=p->next;
+		}
+		cout<<endl<<endl;
+	}
+	cout<<"最近最久未使用置换算法缺页中断次数："<<interrupt_num<<endl;
+	interrupt[3]=((float)interrupt_num/20.0)*100.0;	
+	
+	DestroyQueue(L);
+	free(p);
+}
+
+void CLOCK()
+{
+	cout<<"\n***********************CLOCK置换算法*************************"<<endl;
+	int interrupt_num=0;
+	int i;
+	int LNode_hit_num=0;		//标记带内存中与带进入页面相同的页面的位置
+	int LNode_flag_num=0;		//标记访问位为0的页面在内存中的位置
+	LinkList L;
+	CreatList(L);
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	for(i=0;i<phy_size;i++)
+	{
+		Insert_LNode(L,ref[i]);
+	}
+	if(L->next==L) exit(-1);
+	p=L->next;
+	for(;p!=L;p=p->next)
+	{
+		cout<<p->data<<"\t";
+		//p->flag=1;
+	}
+	cout<<endl;
+	p=L->next;
+	while(p!=L)
+	{
+		cout<<"A:"<<p->flag<<"\t";
+		p=p->next;
+	}
+	cout<<endl<<endl;
+	for(i=phy_size;i<ref_size;i++)
+	{
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),FOREGROUND_INTENSITY | FOREGROUND_INTENSITY);
+		if(!Search_LinkList(L,ref[i],LNode_hit_num))
+		{
+			Search_LL_Flag(L,LNode_flag_num);//找到第一个flag标志为0的结点，其序号记录在LNode_flag_num中
+			LNode_flag_num--;
+			Exchange_LNode(L,ref[i],LNode_flag_num);//将链表L中序号为LNode_flag_num的结点替换为内容为ref[i]的结点
+			interrupt_num++;
+			SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),FOREGROUND_INTENSITY | FOREGROUND_BLUE);
+		}
+		else
+			Set_LL_Flag(L,LNode_hit_num);
+		cout<<"进入页："<<ref[i]<<endl;
+		p=L->next;
+		for(;p!=L;p=p->next)
+		{
+			cout<<p->data<<"\t";
+			//p->flag=1;
+		}
+		cout<<endl;
+		p=L->next;
+		while(p!=L)
+		{
+			cout<<"A:"<<p->flag<<"\t";
+			p=p->next;
+		}
+		cout<<endl<<endl;
+	}
+	cout<<"CLOCK置换算法缺页中断次数："<<interrupt_num<<endl;		// 
+	interrupt[4]=((float)interrupt_num/20.0)*100.0;	
+	DestroyLinkList(L);
+	//free(L);
+}
+
+void Modified_Clock()
+{
+	cout<<"\n*******************改进的CLOCK置换算法*************************"<<endl;
+	int interrupt_num=0;
+	int i,temp;
+	int LNode_hit_num=0;
+	int LNode_flag_num=0;
+	int LNode_modify_num=0;
+	LinkList L;
+	CreatList(L);
+	LinkList p;
+	p=(LinkList)malloc(sizeof(LNode));
+	for(i=0;i<phy_size;i++)
+	{
+		Insert_LNode(L,ref[i]);
+	}
+	if(L->next==L) exit(-1);
+	p=L->next;
+	for(;p!=L;p=p->next)
+	{
+		cout<<p->data<<"\t\t";
+		//p->flag=1;
+	}
+	cout<<endl;
+	Sleep(1000);
+	srand(time(NULL));		//设置时间种子
+	temp=rand()%3;
+	cout<<"修改页（内存中序号）："<<temp<<endl;
+	Set_LL_modify(L,temp);
+	p=L->next;
+	while(p!=L)
+	{
+		cout<<"A:"<<p->flag<<"\tM:"<<p->modify<<"\t";
+		p=p->next;
+	}
+	cout<<endl<<endl;
+	for(i=phy_size;i<ref_size;i++)
+	{
+		if(!Search_LinkList(L,ref[i],LNode_hit_num))
+		{
+			Search_LL_ModifyClock(L,LNode_modify_num);
+			//Search_LL_Flag(L,LNode_flag_num);
+			LNode_modify_num--;
+			Exchange_LNode(L,ref[i],LNode_modify_num);
+			interrupt_num++;
+		}
+		else
+			Set_LL_Flag(L,LNode_hit_num);
+		cout<<"进入页："<<ref[i]<<endl;
+		p=L->next;
+		for(;p!=L;p=p->next)
+		{
+			cout<<p->data<<"\t\t";
+			//p->flag=1;
+		}
+		cout<<endl;
+		Sleep(1000);
+		srand(time(NULL));		//设置时间种子
+		temp=rand()%3;
+		cout<<"修改页（内存中序号）："<<temp<<endl;
+		Set_LL_modify(L,temp);
+		
+		p=L->next;
+		while(p!=L)
+		{
+			cout<<"A:"<<p->flag<<"\tM:"<<p->modify<<"\t";
+			p=p->next;
+		}
+		cout<<endl<<endl;
+	}
+	cout<<"改进的CLOCK置换算法缺页中断次数："<<interrupt_num<<endl;			interrupt[5]=((float)interrupt_num/20.0)*100.0;	
+	DestroyLinkList(L);
+	//free(L);
+}
+
+int main()
+{
+	set_rand_num();
+	ORA();
+	RAND();
+	FIFO();
+	LRU();
+	CLOCK();
+	Modified_Clock();//
+	cout<<"\n\t\t\t缺页率"<<endl;
+	cout<<"\n最佳置换\t\t"<<interrupt[0]<<"%"<<endl;
+	cout<<"\n先进先出置换\t\t"<<interrupt[2]<<"%"<<endl;
+	cout<<"\n最近最久未使用置换\t"<<interrupt[3]<<"%"<<endl;
+	cout<<"\nCLOCK置换\t\t"<<interrupt[4]<<"%"<<endl;
+	cout<<"\n改进CLOCK置换\t\t"<<interrupt[5]<<"%"<<endl;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),FOREGROUND_INTENSITY | FOREGROUND_INTENSITY);
+	return 1;
+}
